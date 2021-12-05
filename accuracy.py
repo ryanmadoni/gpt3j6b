@@ -33,7 +33,7 @@ samples = 3
 texts = questions[:samples]
 
 print(f"Sampling {samples} from {len(questions)} testing data points")
-print("Preprocess completed")
+print("Preprocessing completed")
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -41,7 +41,7 @@ tokenizer = GPT2Tokenizer.from_pretrained('finetuned')
 tokenizer.padding_side = "left"
 tokenizer.pad_token = tokenizer.eos_token
 model = GPT2LMHeadModel.from_pretrained('finetuned').to(device)
-print("Model loaded\nProcessing:")
+print("Model loaded\nProcessing Texts:")
 
 generated_texts = []
 
@@ -67,7 +67,7 @@ with open(f"./results.jsonl", "w") as file:
         generatedNumberAnswer = getNumberAnswer(generatedWordAnswer)
         bleuScore = sentence_bleu([wordAnswers[index].split(' ')],
                                   generatedWordAnswer.split(' '),
-                                  smoothing_function=SmoothingFunction.method4)
+                                  smoothing_function=SmoothingFunction().method4)
 
         datapoint = {"question": value,
                      "wordAnswer": wordAnswers[index],
