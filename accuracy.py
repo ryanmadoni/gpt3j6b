@@ -1,7 +1,7 @@
 import json
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 import torch
-from nltk.translate.bleu_score import sentence_bleu
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
 def getNumberAnswer(explanation):
     """
@@ -10,7 +10,7 @@ def getNumberAnswer(explanation):
         if value == '#':
             return explanation[-index+1:]
 
-    
+
 # Open the test.jsonl as a json list.  The data set
 # is from https://github.com/openai/grade-school-math.
 with open('./test.jsonl', 'r') as json_file:
@@ -46,13 +46,13 @@ print("Model loaded\nProcessing:")
 generated_texts = []
 
 for index, text in enumerate(texts):
-    print(f"Porcessing text {index + 1} / {samples}")
+    print(f"Processing text {index + 1} / {samples}")
 
     encoding = tokenizer([text], padding=True, return_tensors='pt').to(device)
     with torch.no_grad():
         generated_ids = model.generate(**encoding, max_length=len(text))
 
-    generated_texts.append(tokenizer.batch_decode(generated_ids, skip_special_tokens=True))
+    generated_texts += tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
 print("Calculating accuracy and BLEU Scores")
 
@@ -65,7 +65,9 @@ with open(f"./results.jsonl", "w") as file:
     for index, value in enumerate(texts):
         generatedWordAnswer = generated_texts[index]
         generatedNumberAnswer = getNumberAnswer(generatedWordAnswer)
-        bleuScore = sentence_bleu([wordAnswers[index].split(' ')], generatedWordAnswer.split(' '))
+        bleuScore = sentence_bleu([wordAnswers[index].split(' ')],
+                                  generatedWordAnswer.split(' '),
+                                  smoothing_function=SmoothingFunction.method4)
 
         datapoint = {"question": value,
                      "wordAnswer": wordAnswers[index],
@@ -75,7 +77,6 @@ with open(f"./results.jsonl", "w") as file:
                      "BLEU": bleuScore}
 
         bleu += bleuScore
-        
         accuracy += (numberAnswers[index] == generatedNumberAnswer)
 
         json.dump(datapoint, file) # Save each entry.
