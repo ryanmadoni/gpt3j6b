@@ -1,6 +1,7 @@
 import json
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 import torch
+from nltk.translate.bleu_score import sentence_bleu
 
 def getNumberAnswer(explanation):
     """
@@ -28,11 +29,10 @@ for dataEntry in jsonl:
     wordAnswers.append(result["answer"])
 
 # Sampling from test.jsonl
-sampling = 3
-texts = questions[:sampling]
-maxAnswerLength = max([len(sentence) for sentence in wordAnswers[:sampling]])
+samples = 3
+texts = questions[:samples]
 
-print(f"Sampling {sampling} from {len(questions)} testing data points")
+print(f"Sampling {samples} from {len(questions)} testing data points")
 print("Preprocess completed")
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -41,17 +41,23 @@ tokenizer = GPT2Tokenizer.from_pretrained('finetuned')
 tokenizer.padding_side = "left"
 tokenizer.pad_token = tokenizer.eos_token
 model = GPT2LMHeadModel.from_pretrained('finetuned').to(device)
-print("Model loaded")
+print("Model loaded\nProcessing:")
 
-encoding = tokenizer(texts, padding=True, return_tensors='pt').to(device)
-with torch.no_grad():
-    generated_ids = model.generate(**encoding, max_length=maxAnswerLength)
-generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+generated_texts = []
 
-accuracy = 0
-for index, value in enumerate(texts):
-    print(value)
-    print(generated_texts[index])
+for index, text in enumerate(texts):
+    print(f"Porcessing text {index + 1} / {samples}")
+
+    encoding = tokenizer([text], padding=True, return_tensors='pt').to(device)
+    with torch.no_grad():
+        generated_ids = model.generate(**encoding, max_length=len(text))
+
+    generated_texts.append(tokenizer.batch_decode(generated_ids, skip_special_tokens=True))
+
+print("Calculating accuracy and BLEU Scores")
+
+accuracy = 0.0
+bleu = 0.0
 
 with open(f"./results.jsonl", "w") as file:
 
@@ -59,19 +65,23 @@ with open(f"./results.jsonl", "w") as file:
     for index, value in enumerate(texts):
         generatedWordAnswer = generated_texts[index]
         generatedNumberAnswer = getNumberAnswer(generatedWordAnswer)
+        bleuScore = sentence_bleu([wordAnswers[index].split(' ')], generatedWordAnswer.split(' '))
 
         datapoint = {"question": value,
-                     "answer": wordAnswers[index],
+                     "wordAnswer": wordAnswers[index],
                      "generatedWordAnswer": generatedWordAnswer,
                      "numberAnswer": numberAnswers[index],
-                     "generatedNumberAnswer": generatedNumberAnswer}
+                     "generatedNumberAnswer": generatedNumberAnswer,
+                     "BLEU": bleuScore}
+
+        bleu += bleuScore
         
         accuracy += (numberAnswers[index] == generatedNumberAnswer)
 
         json.dump(datapoint, file) # Save each entry.
         file.write("\n") # pad each entry with a '\n'.
 
-        print(accuracy)
-        print(accuracy / sampling)
+    print(f"Accuracy: {accuracy / samples}, {accuracy} / {samples}")
+    print(f"Average BLEU Score: {bleu / samples}")
 
 
