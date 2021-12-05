@@ -27,6 +27,12 @@ for dataEntry in jsonl:
     numberAnswers.append(getNumberAnswer(result["answer"]))
     wordAnswers.append(result["answer"])
 
+# Sampling from test.jsonl
+sampling = 3
+texts = questions[:sampling]
+maxAnswerLength = max([len(sentence) for sentence in wordAnswers[:sampling]])
+
+print(f"Sampling {sampling} from {len(questions)} testing data points")
 print("Preprocess completed")
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -37,17 +43,35 @@ tokenizer.pad_token = tokenizer.eos_token
 model = GPT2LMHeadModel.from_pretrained('finetuned').to(device)
 print("Model loaded")
 
-# this is a single input batch with size 3
-texts = questions[:3]
-
 encoding = tokenizer(texts, padding=True, return_tensors='pt').to(device)
 with torch.no_grad():
-    generated_ids = model.generate(**encoding, max_length=100)
+    generated_ids = model.generate(**encoding, max_length=maxAnswerLength)
 generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
 accuracy = 0
 for index, value in enumerate(texts):
     print(value)
     print(generated_texts[index])
+
+with open(f"./results.jsonl", "w") as file:
+
+    # Loop for each entry to be saved in the JSONL file.
+    for index, value in enumerate(texts):
+        generatedWordAnswer = generated_texts[index]
+        generatedNumberAnswer = getNumberAnswer(generatedWordAnswer)
+
+        datapoint = {"question": value,
+                     "answer": wordAnswers[index],
+                     "generatedWordAnswer": generatedWordAnswer,
+                     "numberAnswer": numberAnswers[index],
+                     "generatedNumberAnswer": generatedNumberAnswer}
+        
+        accuracy += (numberAnswers[index] == generatedNumberAnswer)
+
+        json.dump(datapoint, file) # Save each entry.
+        file.write("\n") # pad each entry with a '\n'.
+
+        print(accuracy)
+        print(accuracy / sampling)
 
 
