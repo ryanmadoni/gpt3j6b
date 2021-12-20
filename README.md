@@ -1,1 +1,1 @@
-# gpt3j6b
+# gptj6b
